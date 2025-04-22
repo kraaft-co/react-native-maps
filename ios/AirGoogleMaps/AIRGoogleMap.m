@@ -626,7 +626,7 @@ id regionAsJSON(MKCoordinateRegion region) {
   if (selectedMarker == self.selectedMarker) {
     return;
   }
-		
+
 	if ([self.selectedMarker isKindOfClass:[AIRGMSMarker class]]){
 		AIRGMSMarker *airMarker = (AIRGMSMarker *) self.selectedMarker;
 		AIRGoogleMapMarker *fakeAirMarker = (AIRGoogleMapMarker *) airMarker.fakeMarker;
@@ -639,7 +639,7 @@ id regionAsJSON(MKCoordinateRegion region) {
 				self.onMarkerDeselect([fakeAirMarker makeEventData:@"marker-deselect"]);
 		}
 	}
-		
+
 		AIRGoogleMapMarker *fakeSelectedMarker = (AIRGoogleMapMarker *) selectedMarker.fakeMarker;
 
 	if (selectedMarker && selectedMarker.onSelect) {
@@ -948,7 +948,8 @@ id regionAsJSON(MKCoordinateRegion region) {
 
 	// Clear previous KML renderer if it exists
 	if (self.kmlRenderer) {
-			self.kmlRenderer = nil;
+		[self.kmlRenderer clear];
+		self.kmlRenderer = nil;
 	}
 
 	NSURL *url = [NSURL URLWithString:kmlUrl];
@@ -957,12 +958,12 @@ id regionAsJSON(MKCoordinateRegion region) {
 			// Local file URL handling
 			GMUKMLParser *parser = [[GMUKMLParser alloc] initWithURL:url];
 			[parser parse];
-			
+
 			self.kmlRenderer = [[GMUGeometryRenderer alloc] initWithMap:self
 																												geometries:parser.placemarks
 																														styles:parser.styles];
 			[(GMUGeometryRenderer *)self.kmlRenderer render];
-			
+
 			if (self.onKmlReady) {
 					self.onKmlReady(@{});
 			}
