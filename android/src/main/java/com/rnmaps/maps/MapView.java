@@ -30,7 +30,6 @@ import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.UIManagerHelper;
@@ -43,7 +42,6 @@ import com.google.android.gms.maps.GoogleMapOptions;
 import com.google.android.gms.maps.MapsInitializer;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.Projection;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.IndoorBuilding;
@@ -52,7 +50,6 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PointOfInterest;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.Polyline;
@@ -62,10 +59,7 @@ import com.google.maps.android.collections.GroundOverlayManager;
 import com.google.maps.android.collections.MarkerManager;
 import com.google.maps.android.collections.PolygonManager;
 import com.google.maps.android.collections.PolylineManager;
-import com.google.maps.android.data.kml.KmlContainer;
 import com.google.maps.android.data.kml.KmlLayer;
-import com.google.maps.android.data.kml.KmlPlacemark;
-import com.google.maps.android.data.kml.KmlStyle;
 
 import org.xmlpull.v1.XmlPullParserException;
 
@@ -116,6 +110,7 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
   private LatLngBounds cameraLastIdleBounds;
   private int cameraMoveReason = 0;
   private MapMarker selectedMarker;
+  private Map<String, KmlLayer> kmlLayers = new HashMap<>();
 
   private static final String[] PERMISSIONS = new String[]{
       "android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"};
@@ -477,7 +472,7 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
     if (selectedMarker == target) {
       return;
     }
-    
+
     WritableMap event;
 
     if (selectedMarker != null) {
@@ -1157,7 +1152,7 @@ public static CameraPosition cameraPositionFromMap(ReadableMap camera){
   public boolean dispatchTouchEvent(MotionEvent ev) {
     gestureDetector.onTouchEvent(ev);
 
-    int X = (int)ev.getX();          
+    int X = (int)ev.getX();
     int Y = (int)ev.getY();
     if(map != null) {
       tapLocation = map.getProjection().fromScreenLocation(new Point(X,Y));
@@ -1320,7 +1315,26 @@ public static CameraPosition cameraPositionFromMap(ReadableMap camera){
     manager.pushEvent(context, this, "onDoublePress", event);
   }
 
-  public void setKmlSrc(String kmlSrc) {
+  public void removeCurrentKml() {
+    if (!this.kmlLayers.isEmpty()) {
+      for (Map.Entry<String, KmlLayer> entry : this.kmlLayers.entrySet()) {
+        entry.getValue().removeLayerFromMap();
+      }
+      this.kmlLayers.clear();
+    }
+  }
+
+  /** comma separated urls */
+  public void setMultipleKmlSrcs(String rawKmlSrc) {
+      this.removeCurrentKml();
+
+      String[] kmlSrcs = rawKmlSrc.split(",");
+      for (String kmlSrc : kmlSrcs) {
+        this.addKmlSrc(kmlSrc);
+      }
+  }
+
+  public void addKmlSrc(String kmlSrc) {
     try {
       InputStream kmlStream =  new FileUtil(context).execute(kmlSrc).get();
 
@@ -1331,79 +1345,7 @@ public static CameraPosition cameraPositionFromMap(ReadableMap camera){
       KmlLayer kmlLayer = new KmlLayer(map, kmlStream, context, markerManager, polygonManager, polylineManager, groundOverlayManager, null);
       kmlLayer.addLayerToMap();
 
-      WritableMap pointers = new WritableNativeMap();
-      WritableArray markers = new WritableNativeArray();
-
-      if (kmlLayer.getContainers() == null) {
-        manager.pushEvent(context, this, "onKmlReady", pointers);
-        return;
-      }
-
-      //Retrieve a nested container within the first container
-      KmlContainer container = kmlLayer.getContainers().iterator().next();
-      if (container == null || container.getContainers() == null) {
-        manager.pushEvent(context, this, "onKmlReady", pointers);
-        return;
-      }
-
-
-      if (container.getContainers().iterator().hasNext()) {
-        container = container.getContainers().iterator().next();
-      }
-
-      int index = 0;
-      for (KmlPlacemark placemark : container.getPlacemarks()) {
-        MarkerOptions options = new MarkerOptions();
-
-        if (placemark.getInlineStyle() != null) {
-          options = placemark.getMarkerOptions();
-        } else {
-          options.icon(BitmapDescriptorFactory.defaultMarker());
-        }
-
-        LatLng latLng = ((LatLng) placemark.getGeometry().getGeometryObject());
-        String title = "";
-        String snippet = "";
-
-        if (placemark.hasProperty("name")) {
-          title = placemark.getProperty("name");
-        }
-
-        if (placemark.hasProperty("description")) {
-          snippet = placemark.getProperty("description");
-        }
-
-        options.position(latLng);
-        options.title(title);
-        options.snippet(snippet);
-
-        MapMarker marker = new MapMarker(context, options, this.manager.getMarkerManager());
-
-        if (placemark.getInlineStyle() != null
-            && placemark.getInlineStyle().getIconUrl() != null) {
-          marker.setImage(placemark.getInlineStyle().getIconUrl());
-        } else if (container.getStyle(placemark.getStyleId()) != null) {
-          KmlStyle style = container.getStyle(placemark.getStyleId());
-          marker.setImage(style.getIconUrl());
-        }
-
-        String identifier = title + " - " + index;
-
-        marker.setIdentifier(identifier);
-
-        addFeature(marker, index++);
-
-        WritableMap loadedMarker = makeClickEventData(latLng);
-        loadedMarker.putString("id", identifier);
-        loadedMarker.putString("title", title);
-        loadedMarker.putString("description", snippet);
-
-        markers.pushMap(loadedMarker);
-      }
-
-      pointers.putArray("markers", markers);
-
-      manager.pushEvent(context, this, "onKmlReady", pointers);
+      this.kmlLayers.put(kmlSrc, kmlLayer);
 
     } catch (XmlPullParserException | IOException | InterruptedException | ExecutionException e) {
       e.printStackTrace();

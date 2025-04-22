@@ -331,7 +331,9 @@ public class MapManager extends ViewGroupManager<MapView> {
     @ReactProp(name = "kmlSrc")
     public void setKmlSrc(MapView view, String kmlUrl) {
         if (kmlUrl != null) {
-            view.setKmlSrc(kmlUrl);
+      view.setMultipleKmlSrcs(kmlUrl);
+    } else {
+      view.removeCurrentKml();
         }
     }
 
