@@ -25,6 +25,7 @@
 #import "AIRMapCircle.h"
 #import "SMCalloutView.h"
 #import "AIRGoogleMapMarker.h"
+#import "AIRGoogleMapPolygon.h"
 #import "RCTConvert+AirMap.h"
 
 #import <MapKit/MapKit.h>
@@ -559,15 +560,24 @@ RCT_EXPORT_METHOD(setIndoorActiveLevelIndex:(nonnull NSNumber *)reactTag
 }
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoWindow:(GMSMarker *)marker {
+	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+		return nil;
+	}
   AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
   return [aMarker.fakeMarker markerInfoWindow];}
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoContents:(GMSMarker *)marker {
+	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+		return nil;
+	}
   AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
   return [aMarker.fakeMarker markerInfoContents];
 }
 
 - (void)mapView:(GMSMapView *)mapView didTapInfoWindowOfMarker:(GMSMarker *)marker {
+	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+		return;
+	}
   AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
   [aMarker.fakeMarker didTapInfoWindowOfMarker:aMarker];
 }

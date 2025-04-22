@@ -4,12 +4,12 @@ import MapView, {Marker} from 'react-native-maps';
 
 const {width, height} = Dimensions.get('window');
 
-const ASPECT_RATIO = width / height;
-const LATITUDE = -18.9193508;
-const LONGITUDE = -48.2830592;
-const LATITUDE_DELTA = 0.0922;
-const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
-const KML_FILE = 'https://pastebin.com/raw/jAzGpq1F';
+const LATITUDE = 46.2276;
+const LONGITUDE = 2.2137;
+const LATITUDE_DELTA = 10;
+// const KML_FILE = 'https://pastebin.com/raw/5XcSeT0b';
+const KML_FILE = 'https://www.google.com/maps/d/u/0/kml?forcekml=1&mid=1VCOOkE4fA1pQWs91UATGjbeOv-BsCNU';
+// const KML_FILE = 'https://pastebin.com/raw/jAzGpq1F';
 
 export default class MapKml extends React.Component<any, any> {
   map: any;
@@ -21,15 +21,9 @@ export default class MapKml extends React.Component<any, any> {
         latitude: LATITUDE,
         longitude: LONGITUDE,
         latitudeDelta: LATITUDE_DELTA,
-        longitudeDelta: LONGITUDE_DELTA,
+        longitudeDelta: LATITUDE_DELTA,
       },
     };
-
-    this.onKmlReady = this.onKmlReady.bind(this);
-  }
-
-  onKmlReady() {
-    this.map.fitToElements({animated: true});
   }
 
   render() {
@@ -42,9 +36,8 @@ export default class MapKml extends React.Component<any, any> {
           provider={this.props.provider}
           style={styles.map}
           initialRegion={this.state.region}
-          kmlSrc={KML_FILE}
-          onKmlReady={this.onKmlReady}>
-          <Marker
+          kmlSrc={KML_FILE}>
+           <Marker
             coordinate={this.state.region}
             title="Test"
             description="Test"
