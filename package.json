@@ -13,7 +13,7 @@
     "format-check": "prettier --check .",
     "build": "tsc --project tsconfig.build.json",
     "test": "jest",
-    "prepare": "husky install",
+    "prepare": "yarn run build",
     "release": "semantic-release",
     "bundle-install": "cd example && bundle install",
     "pod-install": "cd example/ios && bundle exec pod install",
