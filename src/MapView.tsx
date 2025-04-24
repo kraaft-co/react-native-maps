@@ -43,7 +43,6 @@ import {
   FitToOptions,
   IndoorBuildingEvent,
   IndoorLevelActivatedEvent,
-  KmlMapEvent,
   LongPressEvent,
   MapPressEvent,
   MapStyleElement,
@@ -324,7 +323,7 @@ export type MapViewProps = ViewProps & {
    * @platform iOS: Google Maps only
    * @platform Android: Supported
    */
-  onKmlReady?: (event: KmlMapEvent) => void;
+  onKmlReady?: () => void;
 
   /**
    * Callback that is called when user makes a "long press" somewhere on the map.

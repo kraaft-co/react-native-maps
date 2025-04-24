@@ -1340,6 +1340,11 @@ public static CameraPosition cameraPositionFromMap(ReadableMap camera){
         removeKmlSrc(kmlUrl);
       }
     });
+
+    if(!kmlSrcList.isEmpty() || !this.kmlLayers.isEmpty()){
+      manager.pushEvent(context, this, "onKmlReady", new WritableNativeMap());
+    }
+
   }
 
   private void removeKmlSrc(String kmlSrc) {

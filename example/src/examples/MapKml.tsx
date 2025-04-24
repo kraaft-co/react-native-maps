@@ -14,10 +14,10 @@ const kmlFiles = [
   'https://pastebin.com/raw/qwZn8dRU',
 ];
 
-type MapKmlProps = Pick<MapViewProps, "provider">
+type MapKmlProps = Pick<MapViewProps, 'provider'>
 
 const MapKml = ({ provider }: MapKmlProps) => {
-  const mapRef = useRef(null);
+  const mapRef = useRef<MapView>(null);
 
   const [selectedKmls, setSelectedKmls] = useState(new Set<string>());
 
@@ -43,14 +43,23 @@ const MapKml = ({ provider }: MapKmlProps) => {
     });
   };
 
+  const handleOnKmlReady = () => {
+    mapRef.current?.animateToRegion({
+      latitude: LATITUDE,
+      longitude: LONGITUDE,
+      latitudeDelta: LATITUDE_DELTA,
+      longitudeDelta: LATITUDE_DELTA,
+    });
+  };
+
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         provider={provider}
         style={styles.map}
-        initialRegion={region}
         kmlSrc={selectedKmlStr}
+        onKmlReady={handleOnKmlReady}
       >
         <Marker
           coordinate={region}

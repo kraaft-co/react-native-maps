@@ -945,6 +945,8 @@ id regionAsJSON(MKCoordinateRegion region) {
 - (void)setKmlSrc:(NSMutableArray<NSString *> *)kmlSrcList {
 #ifdef HAVE_GOOGLE_MAPS_UTILS
 
+    dispatch_group_t group = dispatch_group_create();
+
     for (NSString *url in [self.kmlLayers allKeys]) {
         if (![kmlSrcList containsObject:url]) {
             [self removeKmlSrc:url];
@@ -953,16 +955,24 @@ id regionAsJSON(MKCoordinateRegion region) {
 
     for (NSString *url in kmlSrcList) {
         if (![self.kmlLayers objectForKey:url]) {
-            [self addKmlSrc:url];
+            [self addKmlSrc:url withGroup:group];
         }
     }
+
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        if (self.onKmlReady) {
+	        if(kmlSrcList.count > 0 || [self.kmlLayers allKeys].count > 0){
+            	self.onKmlReady(@{});
+            }
+        }
+    });
 
 #else
     REQUIRES_GOOGLE_MAPS_UTILS();
 #endif
 }
 
-- (void)addKmlSrc:(NSString *)kmlSrc {
+- (void)addKmlSrc:(NSString *)kmlSrc withGroup:(dispatch_group_t)group {
 
     NSURL *url = [NSURL URLWithString:kmlSrc];
     if ([url isFileURL]) {
@@ -976,11 +986,9 @@ id regionAsJSON(MKCoordinateRegion region) {
         [renderer render];
         self.kmlLayers[kmlSrc] = renderer;
 
-        if (self.onKmlReady) {
-            self.onKmlReady(@{});
-        }
     } else {
-        // Remote URL handling asynchronously with NSURLSession
+        dispatch_group_enter(group);
+
         NSURLSessionDataTask *task = [[NSURLSession sharedSession]
                                       dataTaskWithURL:url
                                       completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -988,6 +996,7 @@ id regionAsJSON(MKCoordinateRegion region) {
 
             if (error) {
                 NSLog(@"Error loading KML: %@", error.localizedDescription);
+                dispatch_group_leave(group);
                 return;
             }
             if (data) {
@@ -1003,10 +1012,10 @@ id regionAsJSON(MKCoordinateRegion region) {
                     [renderer render];
                     self.kmlLayers[kmlSrc] = renderer;
 
-                    if (self.onKmlReady) {
-                        self.onKmlReady(@{});
-                    }
+                    dispatch_group_leave(group);
                 });
+            } else {
+                dispatch_group_leave(group);
             }
 
         }];
