@@ -996,22 +996,16 @@ id regionAsJSON(MKCoordinateRegion region) {
                 [parser parse];
 
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    self.kmlRenderer = [[GMUGeometryRenderer alloc] initWithMap:self
-                                                                     geometries:parser.placemarks
-                                                                         styles:parser.styles];
-                    [(GMUGeometryRenderer *)self.kmlRenderer render];
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] initWithMap:self
-                                                                                      geometries:parser.placemarks
-                                                                                          styles:parser.styles];
+                    GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] initWithMap:self
+                                                                                  geometries:parser.placemarks
+                                                                                      styles:parser.styles];
 
-                        [renderer render];
-                        self.kmlLayers[kmlSrc] = renderer;
+                    [renderer render];
+                    self.kmlLayers[kmlSrc] = renderer;
 
-                        if (self.onKmlReady) {
-                            self.onKmlReady(@{});
-                        }
-                    });
+                    if (self.onKmlReady) {
+                        self.onKmlReady(@{});
+                    }
                 });
             }
 
