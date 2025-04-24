@@ -11,7 +11,7 @@ const LATITUDE_DELTA = 10;
 const kmlFiles = [
   'https://pastebin.com/raw/5XcSeT0b',
   'https://pastebin.com/raw/jAzGpq1F',
-  'https://www.google.com/maps/d/u/0/kml?forcekml=1&mid=1VCOOkE4fA1pQWs91UATGjbeOv-BsCNU'
+  'https://pastebin.com/raw/qwZn8dRU',
 ];
 
 export default class MapKml extends React.Component<any, any> {

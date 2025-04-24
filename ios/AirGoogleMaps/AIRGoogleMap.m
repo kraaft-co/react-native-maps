@@ -25,6 +25,7 @@
 #import <objc/runtime.h>
 
 #ifdef HAVE_GOOGLE_MAPS_UTILS
+#import "GMUGeometryRenderer.h"
 #import "GMUKMLParser.h"
 #import "GMUPlacemark.h"
 #import "GMUPoint.h"
@@ -52,6 +53,8 @@ id regionAsJSON(MKCoordinateRegion region) {
 @interface AIRGoogleMap () <GMSIndoorDisplayDelegate>
 
 - (id)eventFromCoordinate:(CLLocationCoordinate2D)coordinate;
+- (void)addKmlSrc:(NSString *)kmlSrc;
+- (void)removeKmlSrc:(NSString *)kmlSrc;
 
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSDictionary*> *origGestureRecognizersMeta;
 
@@ -112,7 +115,8 @@ id regionAsJSON(MKCoordinateRegion region) {
               options:NSKeyValueObservingOptionNew
               context:NULL];
 
-    self.origGestureRecognizersMeta = [[NSMutableDictionary alloc] init];
+        self.kmlLayers = [[NSMutableDictionary alloc] init];
+        self.origGestureRecognizersMeta = [[NSMutableDictionary alloc] init];
 
     self.indoorDisplay.delegate = self;
   }
@@ -128,10 +132,10 @@ id regionAsJSON(MKCoordinateRegion region) {
             forKeyPath:@"myLocation"
                context:NULL];
 
-  // Clean up KML renderer
-  if (self.kmlRenderer) {
-    self.kmlRenderer = nil;
-  }
+    // Clean up KML renderer
+    if (self.kmlLayers) {
+        self.kmlLayers = nil;
+    }
 }
 
 - (id)eventFromCoordinate:(CLLocationCoordinate2D)coordinate {
@@ -938,66 +942,88 @@ id regionAsJSON(MKCoordinateRegion region) {
 #endif
 }
 
-- (NSString *)KmlSrc {
-  return _kmlSrc;
-}
-
-- (void)setKmlSrc:(NSString *)kmlUrl {
+- (void)setKmlSrc:(NSMutableArray<NSString *> *)kmlSrcList {
 #ifdef HAVE_GOOGLE_MAPS_UTILS
-	_kmlSrc = kmlUrl;
 
-	// Clear previous KML renderer if it exists
-	if (self.kmlRenderer) {
-		[self.kmlRenderer clear];
-		self.kmlRenderer = nil;
-	}
+    for (NSString *url in [self.kmlLayers allKeys]) {
+        if (![kmlSrcList containsObject:url]) {
+            [self removeKmlSrc:url];
+        }
+    }
 
-	NSURL *url = [NSURL URLWithString:kmlUrl];
-
-	if ([url isFileURL]) {
-			// Local file URL handling
-			GMUKMLParser *parser = [[GMUKMLParser alloc] initWithURL:url];
-			[parser parse];
-
-			self.kmlRenderer = [[GMUGeometryRenderer alloc] initWithMap:self
-																												geometries:parser.placemarks
-																														styles:parser.styles];
-			[(GMUGeometryRenderer *)self.kmlRenderer render];
-
-			if (self.onKmlReady) {
-					self.onKmlReady(@{});
-			}
-	} else {
-			// Remote URL handling asynchronously with NSURLSession
-			NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithURL:url
-					completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-					if (error) {
-							NSLog(@"Error loading KML: %@", error.localizedDescription);
-							return;
-					}
-					if (data) {
-							// Parse the KML data from downloaded content
-							GMUKMLParser *parser = [[GMUKMLParser alloc] initWithData:data];
-							[parser parse];
-
-							dispatch_async(dispatch_get_main_queue(), ^{
-									self.kmlRenderer = [[GMUGeometryRenderer alloc] initWithMap:self
-																																		geometries:parser.placemarks
-																																				styles:parser.styles];
-									[(GMUGeometryRenderer *)self.kmlRenderer render];
-
-									if (self.onKmlReady) {
-											self.onKmlReady(@{});
-									}
-							});
-					}
-			}];
-			[task resume];
-	}
+    for (NSString *url in kmlSrcList) {
+        if (![self.kmlLayers objectForKey:url]) {
+            [self addKmlSrc:url];
+        }
+    }
 
 #else
-	REQUIRES_GOOGLE_MAPS_UTILS();
+    REQUIRES_GOOGLE_MAPS_UTILS();
 #endif
+}
+
+- (void)addKmlSrc:(NSString *)kmlSrc {
+
+    NSURL *url = [NSURL URLWithString:kmlSrc];
+    if ([url isFileURL]) {
+        // Local file URL handling
+        GMUKMLParser *parser = [[GMUKMLParser alloc] initWithURL:url];
+        [parser parse];
+
+        GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] initWithMap:super.self
+                                                                      geometries:parser.placemarks
+                                                                        styles:parser.styles];
+        [renderer render];
+        self.kmlLayers[kmlSrc] = renderer;
+
+        if (self.onKmlReady) {
+            self.onKmlReady(@{});
+        }
+    } else {
+        // Remote URL handling asynchronously with NSURLSession
+        NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+                                      dataTaskWithURL:url
+                                      completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+
+
+            if (error) {
+                NSLog(@"Error loading KML: %@", error.localizedDescription);
+                return;
+            }
+            if (data) {
+                // Parse the KML data from downloaded content
+                GMUKMLParser *parser = [[GMUKMLParser alloc] initWithData:data];
+                [parser parse];
+
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    self.kmlRenderer = [[GMUGeometryRenderer alloc] initWithMap:self
+                                                                     geometries:parser.placemarks
+                                                                         styles:parser.styles];
+                    [(GMUGeometryRenderer *)self.kmlRenderer render];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] initWithMap:self
+                                                                                      geometries:parser.placemarks
+                                                                                          styles:parser.styles];
+
+                        [renderer render];
+                        self.kmlLayers[kmlSrc] = renderer;
+
+                        if (self.onKmlReady) {
+                            self.onKmlReady(@{});
+                        }
+                    });
+                });
+            }
+
+        }];
+        [task resume];
+    }
+}
+
+- (void)removeKmlSrc:(NSString *)kmlSrc {
+    GMUGeometryRenderer *renderer = self.kmlLayers[kmlSrc];
+    [renderer clear];
+    [self.kmlLayers removeObjectForKey:kmlSrc];
 }
 
 

@@ -14,6 +14,7 @@
 #import <MapKit/MapKit.h>
 #import "AIRGMSMarker.h"
 #import "RCTConvert+AirMap.h"
+#import "GMUGeometryRenderer.h"
 
 @interface AIRGoogleMap : GMSMapView
 
@@ -50,7 +51,9 @@
 @property (nonatomic, strong) NSMutableArray *heatmaps;
 @property (nonatomic, strong) NSMutableArray *tiles;
 @property (nonatomic, strong) NSMutableArray *overlays;
-@property (nonatomic, strong) id kmlRenderer;
+@property (nonatomic, strong) GMUGeometryRenderer *kmlRenderer;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, GMUGeometryRenderer *> *kmlLayers;
+@property (nonatomic, strong) NSMutableArray<NSString *> *kmlSrc;
 
 @property (nonatomic, assign) BOOL showsBuildings;
 @property (nonatomic, assign) BOOL showsTraffic;
@@ -65,7 +68,6 @@
 @property (nonatomic, assign) BOOL showsMyLocationButton;
 @property (nonatomic, assign) BOOL showsIndoors;
 @property (nonatomic, assign) BOOL showsIndoorLevelPicker;
-@property (nonatomic, assign) NSString *kmlSrc;
 
 - (void)didPrepareMap;
 - (void)mapViewDidFinishTileRendering;
