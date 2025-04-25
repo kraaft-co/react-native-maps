@@ -25,7 +25,6 @@
 #import <objc/runtime.h>
 
 #ifdef HAVE_GOOGLE_MAPS_UTILS
-#import "GMUGeometryRenderer.h"
 #import "GMUKMLParser.h"
 #import "GMUPlacemark.h"
 #import "GMUPoint.h"
@@ -980,9 +979,10 @@ id regionAsJSON(MKCoordinateRegion region) {
         GMUKMLParser *parser = [[GMUKMLParser alloc] initWithURL:url];
         [parser parse];
 
-        GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] initWithMap:super.self
-                                                                      geometries:parser.placemarks
-                                                                        styles:parser.styles];
+        GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] 	initWithMap:super.self
+                                                                    	geometries:parser.placemarks
+                                                                    	styles:parser.styles
+                                                                    	styleMaps:parser.styleMaps];
         [renderer render];
         self.kmlLayers[kmlSrc] = renderer;
 
@@ -1005,9 +1005,10 @@ id regionAsJSON(MKCoordinateRegion region) {
                 [parser parse];
 
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc] initWithMap:self
-                                                                                  geometries:parser.placemarks
-                                                                                      styles:parser.styles];
+                    GMUGeometryRenderer *renderer = [[GMUGeometryRenderer alloc]    initWithMap:super.self
+                                                                                    geometries:parser.placemarks
+                                                                                    styles:parser.styles
+                                                                                    styleMaps:parser.styleMaps];
 
                     [renderer render];
                     self.kmlLayers[kmlSrc] = renderer;
