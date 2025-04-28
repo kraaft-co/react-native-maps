@@ -9,8 +9,8 @@ const LONGITUDE = 2.2137;
 const LATITUDE_DELTA = 10;
 
 const kmlFiles = [
+  'https://www.google.com/maps/d/u/0/kml?mid=12u1KMaAe02f5iDEMEYeIcXGaUJd_54Y&cid=mp&cv=czMHwAlgGtA.fr.',
   'https://pastebin.com/raw/5XcSeT0b',
-  'https://pastebin.com/raw/jAzGpq1F',
   'https://pastebin.com/raw/qwZn8dRU',
 ];
 
