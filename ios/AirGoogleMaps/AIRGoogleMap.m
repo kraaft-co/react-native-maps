@@ -17,30 +17,13 @@
 #import "AIRGoogleMapUrlTile.h"
 #import "AIRGoogleMapWMSTile.h"
 #import "AIRGoogleMapOverlay.h"
+#import "AIRKmlDocumentManager.h"
 #import <GoogleMaps/GoogleMaps.h>
 #import <MapKit/MapKit.h>
 #import <React/UIView+React.h>
 #import <React/RCTBridge.h>
 #import "RCTConvert+AirMap.h"
 #import <objc/runtime.h>
-#import <SSZipArchive/SSZipArchive.h>
-#import <CommonCrypto/CommonDigest.h>
-#import <CommonCrypto/CommonCrypto.h>
-
-#ifdef HAVE_GOOGLE_MAPS_UTILS
-#import "GMUKMLParser.h"
-#import "GMUPlacemark.h"
-#import "GMUPoint.h"
-#import "GMUGeometryRenderer.h"
-#define REQUIRES_GOOGLE_MAPS_UTILS(feature) do {} while (0)
-#else
-#define GMUKMLParser void
-#define GMUPlacemark void
-#define REQUIRES_GOOGLE_MAPS_UTILS(feature) do { \
- [NSException raise:@"ReactNativeMapsDependencyMissing" \
-             format:@"Use of " feature "requires Google-Maps-iOS-Utils, you  must install via CocoaPods to use this feature"]; \
-} while (0)
-#endif
 
 
 id regionAsJSON(MKCoordinateRegion region) {
@@ -51,31 +34,12 @@ id regionAsJSON(MKCoordinateRegion region) {
            @"longitudeDelta": [NSNumber numberWithDouble:region.span.longitudeDelta],
            };
 }
-
-
-static const uint8_t kZipMagic[4] = {0x50, 0x4B, 0x03, 0x04}; // “PK\003\004”
-
-static NSString *HashStringSHA256(NSString *input)
-{
-  const char *bytes = input.UTF8String;
-  uint8_t digest[CC_SHA256_DIGEST_LENGTH];
-  CC_SHA256(bytes, (CC_LONG)strlen(bytes), digest);
-
-  NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
-  for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) {
-    [hex appendFormat:@"%02x", digest[i]];
-  }
-  return hex;
-}
-
 @interface AIRGoogleMap () <GMSIndoorDisplayDelegate>
 
 - (id)eventFromCoordinate:(CLLocationCoordinate2D)coordinate;
-- (void)addKmlSrc:(NSString *)kmlSrc;
-- (void)removeKmlSrc:(NSString *)kmlSrc;
 
+@property (nonatomic, strong) AIRKmlDocumentManager *kmlDocumentManager;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSDictionary *> *origGestureRecognizersMeta;
-@property (nonatomic, strong) NSFileManager *fileManager;
 
 @end
 
@@ -134,10 +98,9 @@ static NSString *HashStringSHA256(NSString *input)
               options:NSKeyValueObservingOptionNew
               context:NULL];
 
-        self.kmlLayers = [[NSMutableDictionary alloc] init];
-        self.origGestureRecognizersMeta = [[NSMutableDictionary alloc] init];
-
+    self.origGestureRecognizersMeta = [[NSMutableDictionary alloc] init];
     self.indoorDisplay.delegate = self;
+    self.kmlDocumentManager = [[AIRKmlDocumentManager alloc] initWithMapView:self];
   }
   return self;
 }
@@ -150,11 +113,6 @@ static NSString *HashStringSHA256(NSString *input)
   [self removeObserver:self
             forKeyPath:@"myLocation"
                context:NULL];
-
-    // Clean up KML renderer
-    if (self.kmlLayers) {
-        self.kmlLayers = nil;
-    }
 }
 
 - (id)eventFromCoordinate:(CLLocationCoordinate2D)coordinate {
@@ -945,294 +903,9 @@ static NSString *HashStringSHA256(NSString *input)
   }
 }
 
-+ (NSString *)GetIconUrl:(GMUPlacemark *) marker parser:(GMUKMLParser *) parser {
-#ifdef HAVE_GOOGLE_MAPS_UTILS
-  if (marker.style.styleID != nil) {
-    for (GMUStyle *style in parser.styles) {
-      if (style.styleID == marker.style.styleID) {
-        return style.iconUrl;
-      }
-    }
-  }
-
-  return marker.style.iconUrl;
-#else
-    REQUIRES_GOOGLE_MAPS_UTILS("GetIconUrl:parser:"); return @"";
-#endif
-}
 
 - (void)setKmlSrc:(NSMutableArray<NSString *> *)kmlSrcList {
-#ifdef HAVE_GOOGLE_MAPS_UTILS
-
-    dispatch_group_t group = dispatch_group_create();
-
-    for (NSString *url in [self.kmlLayers allKeys]) {
-        if (![kmlSrcList containsObject:url]) {
-            [self removeKmlSrc:url];
-        }
-    }
-
-    for (NSString *url in kmlSrcList) {
-        if (![self.kmlLayers objectForKey:url]) {
-            [self addKmlSrc:url withGroup:group];
-        }
-    }
-
-    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-      if (self.onKmlReady) {
-          if (kmlSrcList.count > 0 || [self.kmlLayers allKeys].count > 0) {
-              self.onKmlReady(@{});
-          }
-      }
-    });
-
-#else
-    REQUIRES_GOOGLE_MAPS_UTILS();
-#endif
-}
-
-- (void)addKmlSrc:(NSString *)kmlSrc withGroup:(dispatch_group_t)group {
-
-	dispatch_group_enter(group);
-
-	NSURL *url = [NSURL URLWithString:kmlSrc];
-  if (url.isFileURL) {
-      [self parseLocalKMLAtURL:url sourceKey:kmlSrc withGroup:group];
-    return;
-  }
-
-	NSString *generatedKmzPath =  [self generateKmzPathForKey:kmlSrc extension:@"kmz"];
-	if ([self.fileManager fileExistsAtPath:generatedKmzPath]) {
-    NSLog(@"Kmz file already downloaded and found at %@", generatedKmzPath);
-    [self handleKMZ:[NSURL fileURLWithPath: generatedKmzPath] sourceKey:kmlSrc group:group];
-    return;
-	}
-
-
-  __weak typeof(self) weakSelf = self;
-
-  [[[NSURLSession sharedSession] dataTaskWithURL:url
-                               completionHandler:^(NSData *data,
-                                                   NSURLResponse *resp,
-                                                   NSError *err)
-  {
-    __strong typeof(weakSelf) self = weakSelf;
-    if (!self) { dispatch_group_leave(group); return; }
-
-    if (err) {
-      NSLog(@"[KML] download error: %@", err.localizedDescription);
-      dispatch_group_leave(group);
-      return;
-    }
-
-    if ([self isZipData:data]) {
-      [self handleKMZData:data sourceKey:kmlSrc group:group];
-    } else {
-      [self handleKMLData:data sourceKey:kmlSrc group:group];
-    }
-  }] resume];
-}
-
-- (BOOL)isZipData:(NSData *)data {
-  return data.length >= 4 &&
-         memcmp(data.bytes, kZipMagic, 4) == 0;
-}
-
-- (void)parseLocalKMLAtURL:(NSURL *)url sourceKey:(NSString *)key withGroup:(dispatch_group_t)group {
-    
-	 NSError *error = nil;
-   NSData *data = [NSData dataWithContentsOfURL:url options:0 error:&error];
-   if (!data) {
-       NSLog(@"[KML] Failed to read local file: %@", error.localizedDescription);
-       return;
-   }
-
-   if ([self isZipData:data]) {
-       [self handleKMZ:url sourceKey:key group:group];
-   } else {
-       // It's a regular KML
-       GMUKMLParser *parser = [[GMUKMLParser alloc] initWithURL:url];
-       [parser parse];
-       [self renderParser:parser
-               withStyles:parser.styles
-               sourceKey:key];
-       dispatch_group_leave(group);
-   }
-}
-
-- (void)handleKMLData:(NSData *)data
-           sourceKey:(NSString *)key
-               group:(dispatch_group_t)group {
-
-  GMUKMLParser *parser = [[GMUKMLParser alloc] initWithData:data];
-  [parser parse];
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self renderParser:parser
-            withStyles:parser.styles
-            sourceKey:key];
-    dispatch_group_leave(group);
-  });
-}
-
-
-- (void)handleKMZ:(NSURL *)zipURL
-        sourceKey:(NSString *)key
-            group:(dispatch_group_t)group {
-
-	NSError  *err = nil;
-	NSString *unzipDir = [self createTempDirectoryForKey:key error:&err];
-
-  if (!unzipDir) {
-    NSLog(@"[KML] temp-file error: %@", err.localizedDescription);
-    dispatch_group_leave(group);
-    return;
-  }
-
-  if (![SSZipArchive unzipFileAtPath:zipURL.path toDestination:unzipDir]) {
-    NSLog(@"[KML] unzip failed for %@", zipURL.lastPathComponent);
-    dispatch_group_leave(group);
-    return;
-  }
-
-  NSString *docPath = [unzipDir stringByAppendingPathComponent:@"doc.kml"];
-  if (![self.fileManager fileExistsAtPath:docPath]) {
-    NSLog(@"[KML] doc.kml not found inside %@", zipURL.lastPathComponent);
-    dispatch_group_leave(group);
-    return;
-  }
-
-  GMUKMLParser *parser = [[GMUKMLParser alloc] initWithURL:[NSURL fileURLWithPath:docPath]];
-  [parser parse];
-
-  NSArray<GMUStyle *> *fixedStyles =
-      [self stylesByFixingIcons:parser.styles baseDir:unzipDir];
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self renderParser:parser
-            withStyles:fixedStyles
-            sourceKey:key];
-    dispatch_group_leave(group);
-  });
-
-}
-
-- (void)handleKMZData:(NSData *)data
-           sourceKey:(NSString *)key
-               group:(dispatch_group_t)group {
-
-    NSError  *err = nil;
-	NSString *generatedPath =  [self generateKmzPathForKey:key extension:@"kmz"];
-	NSURL    *zipURL   = [self writeData:data path:generatedPath error:&err];
-
-	if (!zipURL) {
-	  NSLog(@"[KML] temp-file error: %@", err.localizedDescription);
-	  dispatch_group_leave(group);
-	  return;
-	}
-
-	return [self handleKMZ:zipURL sourceKey:key group:group];
-}
-
-- (NSArray<GMUStyle *> *)stylesByFixingIcons:(NSArray<GMUStyle *> *)styles
-                                     baseDir:(NSString *)baseDir {
-
-  NSMutableArray *newStyles = [NSMutableArray arrayWithCapacity:styles.count];
-
-  for (GMUStyle *style in styles) {
-    NSString *icon = style.iconUrl;
-
-    // change only relative paths
-    if (icon.length &&
-        ![icon hasPrefix:@"http://"] &&
-        ![icon hasPrefix:@"https://"] &&
-        ![icon hasPrefix:@"/"])
-    {
-      NSString *absIconPath =
-          [baseDir stringByAppendingPathComponent:icon];
-      icon = [NSURL fileURLWithPath:absIconPath].absoluteString;
-    }
-
-    GMUStyle *s = [[GMUStyle alloc] initWithStyleID:style.styleID
-                                        strokeColor:style.strokeColor
-                                          fillColor:style.fillColor
-                                              width:style.width
-                                              scale:style.scale
-                                            heading:style.heading
-                                             anchor:style.anchor
-                                            iconUrl:icon
-                                              title:style.title
-                                            hasFill:style.hasFill
-                                          hasStroke:style.hasStroke];
-    [newStyles addObject:s];
-  }
-  return newStyles;
-}
-
-- (void)renderParser:(GMUKMLParser *)parser
-          withStyles:(NSArray<GMUStyle *> *)styles
-          sourceKey:(NSString *)key {
-
-  GMUGeometryRenderer *renderer =
-      [[GMUGeometryRenderer alloc] initWithMap:self
-                                    geometries:parser.placemarks
-                                        styles:styles
-                                     styleMaps:parser.styleMaps];
-
-  [renderer render];
-  self.kmlLayers[key] = renderer;
-}
-
-
-- (NSString *)generateKmzPathForKey:(NSString *)key
-                       		extension:(NSString *)ext {
-    NSString *hashedName   = [HashStringSHA256(key) stringByAppendingPathExtension:ext];
-    NSString *path         = [NSTemporaryDirectory() stringByAppendingPathComponent:hashedName];
-
-    return path;
-}
-
-- (NSURL *)writeData:(NSData *)data
-           		  path:(NSString *)path
-               error:(NSError *__autoreleasing *)err {
-
-    // If the file already exists we reuse it.
-    if (![self.fileManager fileExistsAtPath:path]) {
-    	if (![data writeToFile:path options:NSDataWritingAtomic error:err]) {
-    	    return nil;
-    	}
-    }
-    return [NSURL fileURLWithPath:path];
-}
-
-- (NSString *)createTempDirectoryForKey:(NSString *)key
-                                  error:(NSError *__autoreleasing *)err
-{
-    NSString *dir = [NSTemporaryDirectory()
-                       stringByAppendingPathComponent:
-                       [HashStringSHA256(key) stringByAppendingString:@".unzipped"]];
-
-
-      if (![self.fileManager fileExistsAtPath:dir]) {
-        if (![self.fileManager createDirectoryAtPath:dir
-                         withIntermediateDirectories:YES
-                                          attributes:nil
-                                               error:err]) {
-          return nil;
-        }
-      }
-      return dir;
-}
-
-- (void)removeKmlSrc:(NSString *)kmlSrc {
-    GMUGeometryRenderer *renderer = self.kmlLayers[kmlSrc];
-    [renderer clear];
-    [self.kmlLayers removeObjectForKey:kmlSrc];
-}
-
-- (NSFileManager *)fileManager {
-  if (!_fileManager) _fileManager = [NSFileManager defaultManager];
-  return _fileManager;
+  [self.kmlDocumentManager setKmlSrc:kmlSrcList];
 }
 
 
