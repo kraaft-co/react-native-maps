@@ -22,4 +22,5 @@ Pod::Spec.new do |s|
   s.dependency 'React-Core'
   s.dependency 'GoogleMaps', '9.3.0'
   s.dependency 'Google-Maps-iOS-Utils', '6.1.0'
+  s.dependency 'SSZipArchive'
 end

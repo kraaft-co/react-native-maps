@@ -26,7 +26,6 @@ target 'rnmshowcase' do
   rn_maps_path = '../..'
   pod 'react-native-google-maps', :path => rn_maps_path
   pod 'react-native-maps', :path => rn_maps_path
-  pod 'SSZipArchive'
 
   target 'rnmshowcaseTests' do
     inherit! :complete
