@@ -68,8 +68,10 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 public class MapView extends com.google.android.gms.maps.MapView implements GoogleMap.InfoWindowAdapter,
@@ -1315,7 +1317,7 @@ public static CameraPosition cameraPositionFromMap(ReadableMap camera){
     manager.pushEvent(context, this, "onDoublePress", event);
   }
 
-  public void removeCurrentKml() {
+  public void clearKmlLayers() {
     if (!this.kmlLayers.isEmpty()) {
       for (Map.Entry<String, KmlLayer> entry : this.kmlLayers.entrySet()) {
         entry.getValue().removeLayerFromMap();
@@ -1324,17 +1326,36 @@ public static CameraPosition cameraPositionFromMap(ReadableMap camera){
     }
   }
 
-  /** comma separated urls */
-  public void setMultipleKmlSrcs(String rawKmlSrc) {
-      this.removeCurrentKml();
-
-      String[] kmlSrcs = rawKmlSrc.split(",");
-      for (String kmlSrc : kmlSrcs) {
-        this.addKmlSrc(kmlSrc);
+  public void setKmlSrcList(ArrayList<String> kmlSrcList) {
+    kmlSrcList.forEach(kmlUrl -> {
+      if (this.kmlLayers.get(kmlUrl) == null) {
+        addKmlSrc(kmlUrl);
       }
+    });
+
+
+    Set<String> currentKmlUrls = new HashSet<>(this.kmlLayers.keySet());
+    currentKmlUrls.forEach(kmlUrl -> {
+      if (!kmlSrcList.contains(kmlUrl)) {
+        removeKmlSrc(kmlUrl);
+      }
+    });
+
+    if(!kmlSrcList.isEmpty() || !this.kmlLayers.isEmpty()){
+      manager.pushEvent(context, this, "onKmlReady", new WritableNativeMap());
+    }
+
   }
 
-  public void addKmlSrc(String kmlSrc) {
+  private void removeKmlSrc(String kmlSrc) {
+    @Nullable KmlLayer layer = this.kmlLayers.get(kmlSrc);
+    if (layer != null) {
+      layer.removeLayerFromMap();
+    }
+    this.kmlLayers.remove(kmlSrc);
+  }
+
+  private void addKmlSrc(String kmlSrc) {
     try {
       InputStream kmlStream =  new FileUtil(context).execute(kmlSrc).get();
 

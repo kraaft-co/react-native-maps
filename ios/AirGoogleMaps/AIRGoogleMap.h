@@ -14,6 +14,7 @@
 #import <MapKit/MapKit.h>
 #import "AIRGMSMarker.h"
 #import "RCTConvert+AirMap.h"
+#import "GMUGeometryRenderer.h"
 
 @interface AIRGoogleMap : GMSMapView
 
@@ -51,6 +52,7 @@
 @property (nonatomic, strong) NSMutableArray *tiles;
 @property (nonatomic, strong) NSMutableArray *overlays;
 
+
 @property (nonatomic, assign) BOOL showsBuildings;
 @property (nonatomic, assign) BOOL showsTraffic;
 @property (nonatomic, assign) BOOL showsCompass;
@@ -64,7 +66,6 @@
 @property (nonatomic, assign) BOOL showsMyLocationButton;
 @property (nonatomic, assign) BOOL showsIndoors;
 @property (nonatomic, assign) BOOL showsIndoorLevelPicker;
-@property (nonatomic, assign) NSString *kmlSrc;
 
 - (void)didPrepareMap;
 - (void)mapViewDidFinishTileRendering;
@@ -78,6 +79,7 @@
 - (void)idleAtCameraPosition:(GMSCameraPosition *)position isGesture:(BOOL)isGesture;
 - (void)didTapPOIWithPlaceID:(NSString *)placeID name:(NSString *) name location:(CLLocationCoordinate2D) location;
 - (NSArray *)getMapBoundaries;
+- (void)setKmlSrc:(NSMutableArray<NSString *> *)kmlSrcList;
 
 + (MKCoordinateRegion)makeGMSCameraPositionFromMap:(GMSMapView *)map andGMSCameraPosition:(GMSCameraPosition *)position;
 + (GMSCameraPosition*)makeGMSCameraPositionFromMap:(GMSMapView *)map andMKCoordinateRegion:(MKCoordinateRegion)region;

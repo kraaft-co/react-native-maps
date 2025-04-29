@@ -25,6 +25,7 @@
 #import "AIRMapCircle.h"
 #import "SMCalloutView.h"
 #import "AIRGoogleMapMarker.h"
+#import "AIRGoogleMapPolygon.h"
 #import "RCTConvert+AirMap.h"
 
 #import <MapKit/MapKit.h>
@@ -126,7 +127,7 @@ RCT_EXPORT_VIEW_PROPERTY(onIndoorBuildingFocused, RCTDirectEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(mapType, GMSMapViewType)
 RCT_EXPORT_VIEW_PROPERTY(minZoomLevel, CGFloat)
 RCT_EXPORT_VIEW_PROPERTY(maxZoomLevel, CGFloat)
-RCT_EXPORT_VIEW_PROPERTY(kmlSrc, NSString)
+RCT_EXPORT_VIEW_PROPERTY(kmlSrc, NSArray)
 RCT_EXPORT_VIEW_PROPERTY(loadingBackgroundColor, UIColor)
 
 RCT_EXPORT_METHOD(getCamera:(nonnull NSNumber *)reactTag
@@ -559,15 +560,24 @@ RCT_EXPORT_METHOD(setIndoorActiveLevelIndex:(nonnull NSNumber *)reactTag
 }
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoWindow:(GMSMarker *)marker {
+	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+		return nil;
+	}
   AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
   return [aMarker.fakeMarker markerInfoWindow];}
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoContents:(GMSMarker *)marker {
+	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+		return nil;
+	}
   AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
   return [aMarker.fakeMarker markerInfoContents];
 }
 
 - (void)mapView:(GMSMapView *)mapView didTapInfoWindowOfMarker:(GMSMarker *)marker {
+	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+		return;
+	}
   AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
   [aMarker.fakeMarker didTapInfoWindowOfMarker:aMarker];
 }

@@ -43,7 +43,6 @@ import {
   FitToOptions,
   IndoorBuildingEvent,
   IndoorLevelActivatedEvent,
-  KmlMapEvent,
   LongPressEvent,
   MapPressEvent,
   MapStyleElement,
@@ -164,7 +163,7 @@ export type MapViewProps = ViewProps & {
    * @platform iOS: Google Maps only
    * @platform Android: Supported
    */
-  kmlSrc?: string;
+  kmlSrc?: string | Array<string>;
 
   /**
    * If set, changes the position of the "Legal" label link in Apple maps.
@@ -324,7 +323,7 @@ export type MapViewProps = ViewProps & {
    * @platform iOS: Google Maps only
    * @platform Android: Supported
    */
-  onKmlReady?: (event: KmlMapEvent) => void;
+  onKmlReady?: () => void;
 
   /**
    * Callback that is called when user makes a "long press" somewhere on the map.
@@ -742,6 +741,7 @@ type ModifiedProps = Modify<
   {
     region?: MapViewProps['region'] | null;
     initialRegion?: MapViewProps['initialRegion'] | null;
+    kmlSrc?: Exclude<MapViewProps['kmlSrc'], string>;
   }
 >;
 
@@ -1095,6 +1095,7 @@ class MapView extends React.Component<MapViewProps, State> {
           ? JSON.stringify(this.props.customMapStyle)
           : undefined,
         ...this.props,
+        kmlSrc: (typeof this.props.kmlSrc === 'string') ? [this.props.kmlSrc] : this.props.kmlSrc,
       };
       if (
         Platform.OS === 'ios' &&
