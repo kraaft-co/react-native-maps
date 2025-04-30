@@ -44,6 +44,7 @@ const MapKml = ({ provider }: MapKmlProps) => {
   };
 
   const handleOnKmlReady = () => {
+    console.log("onKmlReady called");
     mapRef.current?.animateToRegion({
       latitude: LATITUDE,
       longitude: LONGITUDE,
