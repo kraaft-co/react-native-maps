@@ -341,22 +341,22 @@ id regionAsJSON(MKCoordinateRegion region) {
 
 - (BOOL)didTapMarker:(GMSMarker *)marker {
 
-	if (![marker isKindOfClass:[AIRGMSMarker class]]) {
-		// It's probably a Marker from KML, so we just use the default behavior
-		NSLog(@"Tapped a marker that is not an AIRGMSMarker. Ignoring.");
-		[super setSelectedMarker:marker];
-		return NO;
-	}
+  if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+    // It's probably a Marker from KML, so we just use the default behavior
+    NSLog(@"Tapped a marker that is not an AIRGMSMarker. Ignoring.");
+    [super setSelectedMarker:marker];
+    return NO;
+  }
 
   AIRGMSMarker *airMarker = (AIRGMSMarker *)marker;
 
   id event = @{@"action": @"marker-press",
                @"id": airMarker.identifier ?: @"unknown",
                @"coordinate": @{
-                   @"latitude": @(airMarker.position.latitude),
-                   @"longitude": @(airMarker.position.longitude)
-                   }
-               };
+                 @"latitude": @(airMarker.position.latitude),
+                 @"longitude": @(airMarker.position.longitude)
+               }
+  };
 
   if (airMarker.onPress) airMarker.onPress(event);
   if (self.onMarkerPress) self.onMarkerPress(event);
@@ -368,29 +368,29 @@ id regionAsJSON(MKCoordinateRegion region) {
 }
 
 - (void)didTapPolyline:(GMSOverlay *)polyline {
-	if (![polyline isKindOfClass:[AIRGMSPolyline class]]) {
-		return;
-	}
+  if (![polyline isKindOfClass:[AIRGMSPolyline class]]) {
+    return;
+  }
   AIRGMSPolyline *airPolyline = (AIRGMSPolyline *)polyline;
 
   id event = @{@"action": @"polyline-press",
                @"id": airPolyline.identifier ?: @"unknown",
-               };
+  };
 
-   if (airPolyline.onPress) airPolyline.onPress(event);
+  if (airPolyline.onPress) airPolyline.onPress(event);
 }
 
 - (void)didTapPolygon:(GMSOverlay *)polygon {
-		if (![polygon isKindOfClass:[AIRGMSPolygon class]]) {
-				return;
-		}
-    AIRGMSPolygon *airPolygon = (AIRGMSPolygon *)polygon;
+  if (![polygon isKindOfClass:[AIRGMSPolygon class]]) {
+    return;
+  }
+  AIRGMSPolygon *airPolygon = (AIRGMSPolygon *)polygon;
 
-    id event = @{@"action": @"polygon-press",
-                 @"id": airPolygon.identifier ?: @"unknown",
-                 };
+  id event = @{@"action": @"polygon-press",
+               @"id": airPolygon.identifier ?: @"unknown",
+  };
 
-    if (airPolygon.onPress) airPolygon.onPress(event);
+  if (airPolygon.onPress) airPolygon.onPress(event);
 }
 
 - (void)didTapAtCoordinate:(CLLocationCoordinate2D)coordinate {
@@ -608,28 +608,28 @@ id regionAsJSON(MKCoordinateRegion region) {
     return;
   }
 
-	if ([self.selectedMarker isKindOfClass:[AIRGMSMarker class]]){
-		AIRGMSMarker *airMarker = (AIRGMSMarker *) self.selectedMarker;
-		AIRGoogleMapMarker *fakeAirMarker = (AIRGoogleMapMarker *) airMarker.fakeMarker;
+  if ([self.selectedMarker isKindOfClass:[AIRGMSMarker class]]){
+    AIRGMSMarker *airMarker = (AIRGMSMarker *) self.selectedMarker;
+    AIRGoogleMapMarker *fakeAirMarker = (AIRGoogleMapMarker *) airMarker.fakeMarker;
 
-		if (airMarker && airMarker.onDeselect) {
-				airMarker.onDeselect([fakeAirMarker makeEventData:@"marker-deselect"]);
-		}
+    if (airMarker && airMarker.onDeselect) {
+      airMarker.onDeselect([fakeAirMarker makeEventData:@"marker-deselect"]);
+    }
 
-		if (airMarker && self.onMarkerDeselect) {
-				self.onMarkerDeselect([fakeAirMarker makeEventData:@"marker-deselect"]);
-		}
-	}
+    if (airMarker && self.onMarkerDeselect) {
+      self.onMarkerDeselect([fakeAirMarker makeEventData:@"marker-deselect"]);
+    }
+  }
 
-		AIRGoogleMapMarker *fakeSelectedMarker = (AIRGoogleMapMarker *) selectedMarker.fakeMarker;
+  AIRGoogleMapMarker *fakeSelectedMarker = (AIRGoogleMapMarker *) selectedMarker.fakeMarker;
 
-	if (selectedMarker && selectedMarker.onSelect) {
-		selectedMarker.onSelect([fakeSelectedMarker makeEventData:@"marker-select"]);
-	}
+  if (selectedMarker && selectedMarker.onSelect) {
+    selectedMarker.onSelect([fakeSelectedMarker makeEventData:@"marker-select"]);
+  }
 
-	if (selectedMarker && self.onMarkerSelect) {
-		self.onMarkerSelect([fakeSelectedMarker makeEventData:@"marker-select"]);
-	}
+  if (selectedMarker && self.onMarkerSelect) {
+    self.onMarkerSelect([fakeSelectedMarker makeEventData:@"marker-select"]);
+  }
 
   [super setSelectedMarker:selectedMarker];
 }
