@@ -26,6 +26,7 @@
     "src",
     "android",
     "ios",
+    "dist",
     "app.plugin.js",
     "plugin/build",
     "react-native-maps.podspec",
