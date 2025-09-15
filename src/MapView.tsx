@@ -176,7 +176,7 @@ export type MapViewProps = ViewProps & {
    * @platform iOS: Google Maps only
    * @platform Android: Supported
    */
-  kmlSrc?: string;
+  kmlSrc?: Array<string> | string;
 
   /**
    * If set, changes the position of the "Legal" label link in Apple Maps.
@@ -775,6 +775,7 @@ type ModifiedProps = Modify<
   {
     region?: MapViewProps['region'] | null;
     initialRegion?: MapViewProps['initialRegion'] | null;
+    kmlSrc?: Exclude<MapViewProps['kmlSrc'], string>;
   }
 >;
 
@@ -1169,6 +1170,7 @@ class MapView extends React.Component<MapViewProps, State> {
       provider,
       children,
       customMapStyle,
+      kmlSrc,
       ...restProps
     } = this.props;
 
@@ -1201,6 +1203,7 @@ class MapView extends React.Component<MapViewProps, State> {
       onLongPress: this.handleLongPress,
       showsPointsOfInterests: this.props.showsPointsOfInterests,
       pointsOfInterestFilter: this.props.pointsOfInterestFilter,
+      kmlSrc: typeof kmlSrc === 'string' ? [kmlSrc] : kmlSrc,
       ...restProps,
     };
     if (this.props.region) {

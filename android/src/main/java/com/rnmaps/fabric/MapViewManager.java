@@ -38,7 +38,9 @@ import com.rnmaps.maps.MapMarker;
 import com.rnmaps.maps.MapView;
 import com.rnmaps.maps.SizeReportingShadowNode;
 
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @ReactModule(name = MapViewManager.REACT_CLASS)
 public class MapViewManager extends ViewGroupManager<MapView> implements RNMapsMapViewManagerInterface<MapView> {
@@ -239,8 +241,18 @@ public class MapViewManager extends ViewGroupManager<MapView> implements RNMapsM
     }
 
     @Override
-    public void setKmlSrc(MapView view, @Nullable String value) {
-        view.setKmlSrc(value);
+    public void setKmlSrc(MapView view, @Nullable ReadableArray kmlUrls) {
+        if (kmlUrls != null && kmlUrls.size() > 0) {
+            ArrayList<String> kmlUrlList = kmlUrls.toArrayList()
+                    .stream()
+                    .filter(obj -> obj instanceof String)
+                    .map(obj -> (String) obj)
+                    .collect(Collectors.toCollection(ArrayList::new));
+
+            view.setKmlSrcList(kmlUrlList);
+        } else {
+            view.clearKmlLayers();
+        }
     }
 
     @Override
