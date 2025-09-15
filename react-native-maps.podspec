@@ -130,6 +130,7 @@ Pod::Spec.new do |s|
     ss.dependency 'Google-Maps-iOS-Utils', google_maps_utils_version #'5.0.0'
     ss.dependency 'react-native-maps/Generated'
     ss.dependency 'react-native-maps/Maps'
+    s.dependency 'SSZipArchive'
     install_modules_dependencies(ss)
   end
 

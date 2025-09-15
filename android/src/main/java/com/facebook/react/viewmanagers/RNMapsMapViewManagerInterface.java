@@ -23,7 +23,7 @@ public interface RNMapsMapViewManagerInterface<T extends View> extends ViewManag
   void setPoiClickEnabled(T view, boolean value);
   void setInitialCamera(T view, @Nullable ReadableMap value);
   void setInitialRegion(T view, @Nullable ReadableMap value);
-  void setKmlSrc(T view, @Nullable String value);
+  void setKmlSrc(T view, @Nullable ReadableArray value);
   void setLegalLabelInsets(T view, @Nullable ReadableMap value);
   void setLiteMode(T view, boolean value);
   void setGoogleMapId(T view, @Nullable String value);
