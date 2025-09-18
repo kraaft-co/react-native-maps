@@ -142,7 +142,7 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
     private static final String[] PERMISSIONS = new String[]{
             "android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"};
 
-    private final Map<Integer, MapFeature> features = new HashMap<>();
+    private final List<MapFeature> features = new ArrayList<>();
     private final Map<Marker, MapMarker> markerMap = new HashMap<>();
     private final Map<Polyline, MapPolyline> polylineMap = new HashMap<>();
     private final Map<Polygon, MapPolygon> polygonMap = new HashMap<>();
@@ -343,8 +343,6 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
         super.onSaveInstanceState(savedMapState);
         super.onPause();
         super.onStop();
-        savedFeatures = new HashMap<>(features);
-        savedFeatures.keySet().forEach(this::removeFeatureAt);
         removeView(attacherGroup);
         attacherGroup = null;
         detachLifecycleObserver();
@@ -375,7 +373,7 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
         boolean addedPosition = false;
         LatLngBounds mapBounds = map.getProjection().getVisibleRegion().latLngBounds;
-        for (MapFeature feature : features.values()) {
+        for (MapFeature feature : features) {
             if (feature instanceof MapMarker) {
                 Marker marker = (Marker) feature.getFeature();
                 if (!onlyVisible ||
@@ -1124,7 +1122,7 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
         if (child instanceof MapMarker) {
             MapMarker annotation = (MapMarker) child;
             annotation.addToMap(markerCollection);
-            features.put(index, annotation);
+            features.add(index, annotation);
 
             // Allow visibility event to be triggered later
             int visibility = annotation.getVisibility();
@@ -1138,7 +1136,9 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
             }
 
             // Add to the parent group
-            attacherGroup.addView(annotation);
+            if (attacherGroup != null) {
+                attacherGroup.addView(annotation);
+            }
 
             // Trigger visibility event if necessary.
             // With some testing, seems like it is not always
@@ -1150,47 +1150,47 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
         } else if (child instanceof MapPolyline) {
             MapPolyline polylineView = (MapPolyline) child;
             polylineView.addToMap(polylineCollection);
-            features.put(index, polylineView);
+            features.add(index, polylineView);
             Polyline polyline = (Polyline) polylineView.getFeature();
             polylineMap.put(polyline, polylineView);
         } else if (child instanceof MapGradientPolyline) {
             MapGradientPolyline polylineView = (MapGradientPolyline) child;
             polylineView.addToMap(map);
-            features.put(index, polylineView);
+            features.add(index, polylineView);
             TileOverlay tileOverlay = (TileOverlay) polylineView.getFeature();
             gradientPolylineMap.put(tileOverlay, polylineView);
         } else if (child instanceof MapPolygon) {
             MapPolygon polygonView = (MapPolygon) child;
             polygonView.addToMap(polygonCollection);
-            features.put(index, polygonView);
+            features.add(index, polygonView);
             Polygon polygon = (Polygon) polygonView.getFeature();
             polygonMap.put(polygon, polygonView);
         } else if (child instanceof MapCircle) {
             MapCircle circleView = (MapCircle) child;
             circleView.addToMap(circleCollection);
-            features.put(index, circleView);
+            features.add(index, circleView);
         } else if (child instanceof MapUrlTile) {
             MapUrlTile urlTileView = (MapUrlTile) child;
             urlTileView.addToMap(map);
-            features.put(index, urlTileView);
+            features.add(index, urlTileView);
         } else if (child instanceof MapWMSTile) {
             MapWMSTile urlTileView = (MapWMSTile) child;
             urlTileView.addToMap(map);
-            features.put(index, urlTileView);
+            features.add(index, urlTileView);
         } else if (child instanceof MapLocalTile) {
             MapLocalTile localTileView = (MapLocalTile) child;
             localTileView.addToMap(map);
-            features.put(index, localTileView);
+            features.add(index, localTileView);
         } else if (child instanceof MapOverlay) {
             MapOverlay overlayView = (MapOverlay) child;
             overlayView.addToMap(groundOverlayCollection);
-            features.put(index, overlayView);
+            features.add(index, overlayView);
             GroundOverlay overlay = (GroundOverlay) overlayView.getFeature();
             overlayMap.put(overlay, overlayView);
         } else if (child instanceof MapHeatmap) {
             MapHeatmap heatmapView = (MapHeatmap) child;
             heatmapView.addToMap(map);
-            features.put(index, heatmapView);
+            features.add(index, heatmapView);
             TileOverlay heatmap = (TileOverlay) heatmapView.getFeature();
             heatmapMap.put(heatmap, heatmapView);
         } else if (child instanceof ViewGroup) {
@@ -1216,7 +1216,9 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
         if (feature instanceof MapMarker) {
             markerMap.remove(feature.getFeature());
             feature.removeFromMap(markerCollection);
-            attacherGroup.removeView(feature);
+            if (attacherGroup != null) {
+                attacherGroup.removeView(feature);
+            }
         } else if (feature instanceof MapHeatmap) {
             heatmapMap.remove(feature.getFeature());
             feature.removeFromMap(map);
@@ -1335,8 +1337,8 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
 
         boolean addedPosition = false;
-        if (!features.isEmpty()) {
-            for (MapFeature feature : features.values()) {
+        if (features.size() > 0) {
+            for (MapFeature feature : features) {
                 if (feature instanceof MapMarker) {
                     Marker marker = (Marker) feature.getFeature();
                     builder.include(marker.getPosition());
@@ -1378,7 +1380,7 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
 
         List<String> markerIDList = Arrays.asList(markerIDs);
 
-        for (MapFeature feature : features.values()) {
+        for (MapFeature feature : features) {
             if (feature instanceof MapMarker) {
                 String identifier = ((MapMarker) feature).getIdentifier();
                 Marker marker = (Marker) feature.getFeature();
