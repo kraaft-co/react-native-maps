@@ -38,7 +38,19 @@ static NSString *const RCTMapViewKey = @"MapView";
 {
     BOOL didCallOnMapReady;
 }
+
+- (UIView *)defaultInfoWindowForMarker:(GMSMarker *)marker;
+- (NSAttributedString *)attributedTextForHTMLString:(NSString *)html
+                                                 font:(UIFont *)font
+                                                color:(UIColor *)color;
+- (NSString *)normalizedStringForSnippet:(NSString *)snippet;
 @end
+
+static const CGFloat kAIRGenericInfoWindowMaxContentWidth = 260.0f;
+static const CGFloat kAIRGenericInfoWindowMinContentWidth = 120.0f;
+static const CGFloat kAIRGenericInfoWindowHorizontalPadding = 12.0f;
+static const CGFloat kAIRGenericInfoWindowVerticalPadding = 10.0f;
+static const CGFloat kAIRGenericInfoWindowInterLabelSpacing = 4.0f;
 
 @implementation AIRGoogleMapManager
 
@@ -480,30 +492,50 @@ RCT_EXPORT_METHOD(setIndoorActiveLevelIndex:(nonnull NSNumber *)reactTag
 }
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoWindow:(GMSMarker *)marker {
+    if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+      return [self defaultInfoWindowForMarker:marker];
+    }
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
     return [aMarker.fakeMarker markerInfoWindow];}
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoContents:(GMSMarker *)marker {
+    if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+      return [self defaultInfoWindowForMarker:marker];
+    }
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
     return [aMarker.fakeMarker markerInfoContents];
 }
 
 - (void)mapView:(GMSMapView *)mapView didTapInfoWindowOfMarker:(GMSMarker *)marker {
+    if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+      return;
+    }
+
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
     [aMarker.fakeMarker didTapInfoWindowOfMarker:aMarker];
 }
 
 - (void)mapView:(GMSMapView *)mapView didBeginDraggingMarker:(GMSMarker *)marker {
+    if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+      return;
+    }
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
     [aMarker.fakeMarker didBeginDraggingMarker:aMarker];
 }
 
 - (void)mapView:(GMSMapView *)mapView didEndDraggingMarker:(GMSMarker *)marker {
+    if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+      return;
+    }
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
     [aMarker.fakeMarker didEndDraggingMarker:aMarker];
 }
 
 - (void)mapView:(GMSMapView *)mapView didDragMarker:(GMSMarker *)marker {
+    if (![marker isKindOfClass:[AIRGMSMarker class]]) {
+      return;
+    }
+
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
     [aMarker.fakeMarker didDragMarker:aMarker];
 }
@@ -538,6 +570,154 @@ didTapPOIWithPlaceID:(NSString *)placeID
     
 }
 
-@end
+- (UIView *)defaultInfoWindowForMarker:(GMSMarker *)marker {
+    NSString *title = marker.title ?: @"";
+    NSString *snippet = marker.snippet ?: @"";
+    if (title.length == 0 && snippet.length == 0) {
+        return nil;
+    }
 
+    UIFont *titleFont = [UIFont boldSystemFontOfSize:16.0f];
+    UIFont *snippetFont = [UIFont systemFontOfSize:14.0f];
+
+    UILabel *titleLabel = nil;
+    CGSize titleSize = CGSizeZero;
+    if (title.length > 0) {
+        titleLabel = [[UILabel alloc] init];
+        titleLabel.text = title;
+        titleLabel.font = titleFont;
+        titleLabel.textColor = [UIColor blackColor];
+        titleLabel.numberOfLines = 0;
+        titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        titleSize = [titleLabel sizeThatFits:CGSizeMake(kAIRGenericInfoWindowMaxContentWidth, CGFLOAT_MAX)];
+    }
+
+    UILabel *snippetLabel = nil;
+    CGSize snippetSize = CGSizeZero;
+    if (snippet.length > 0) {
+        snippetLabel = [[UILabel alloc] init];
+        snippetLabel.numberOfLines = 0;
+        snippetLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        NSAttributedString *formattedSnippet = [self attributedTextForHTMLString:snippet
+                                                                            font:snippetFont
+                                                                           color:[UIColor darkGrayColor]];
+        if (formattedSnippet) {
+            snippetLabel.attributedText = formattedSnippet;
+        } else {
+            snippetLabel.font = snippetFont;
+            snippetLabel.textColor = [UIColor darkGrayColor];
+            snippetLabel.text = [self normalizedStringForSnippet:snippet];
+        }
+        snippetSize = [snippetLabel sizeThatFits:CGSizeMake(kAIRGenericInfoWindowMaxContentWidth, CGFLOAT_MAX)];
+    }
+
+    CGFloat contentWidth = MAX(titleSize.width, snippetSize.width);
+    if (contentWidth == 0) {
+        contentWidth = kAIRGenericInfoWindowMinContentWidth;
+    }
+    contentWidth = MIN(kAIRGenericInfoWindowMaxContentWidth,
+                       MAX(kAIRGenericInfoWindowMinContentWidth, contentWidth));
+
+    if (titleLabel) {
+        titleSize = [titleLabel sizeThatFits:CGSizeMake(contentWidth, CGFLOAT_MAX)];
+    }
+    if (snippetLabel) {
+        snippetSize = [snippetLabel sizeThatFits:CGSizeMake(contentWidth, CGFLOAT_MAX)];
+    }
+
+    CGFloat currentY = kAIRGenericInfoWindowVerticalPadding;
+    UIView *container = [[UIView alloc] initWithFrame:CGRectZero];
+
+    if (titleLabel) {
+        titleLabel.frame = CGRectMake(kAIRGenericInfoWindowHorizontalPadding,
+                                      currentY,
+                                      contentWidth,
+                                      titleSize.height);
+        currentY += titleSize.height;
+        [container addSubview:titleLabel];
+        if (snippetLabel) {
+            currentY += kAIRGenericInfoWindowInterLabelSpacing;
+        }
+    }
+
+    if (snippetLabel) {
+        snippetLabel.frame = CGRectMake(kAIRGenericInfoWindowHorizontalPadding,
+                                        currentY,
+                                        contentWidth,
+                                        snippetSize.height);
+        currentY += snippetSize.height;
+        [container addSubview:snippetLabel];
+    }
+
+    currentY += kAIRGenericInfoWindowVerticalPadding;
+    CGFloat totalWidth = contentWidth + (kAIRGenericInfoWindowHorizontalPadding * 2.0f);
+    container.frame = CGRectMake(0, 0, totalWidth, currentY);
+    container.backgroundColor = [UIColor whiteColor];
+    container.layer.cornerRadius = 12.0f;
+    container.layer.borderWidth = 1.0f / UIScreen.mainScreen.scale;
+    container.layer.borderColor = [UIColor colorWithWhite:0 alpha:0.08f].CGColor;
+    container.layer.shadowColor = [UIColor colorWithWhite:0 alpha:0.2f].CGColor;
+    container.layer.shadowOpacity = 0.3f;
+    container.layer.shadowRadius = 6.0f;
+    container.layer.shadowOffset = CGSizeMake(0, 2.0f);
+
+    return container;
+}
+
+- (NSAttributedString *)attributedTextForHTMLString:(NSString *)html
+                                               font:(UIFont *)font
+                                              color:(UIColor *)color {
+    if (html.length == 0) {
+        return nil;
+    }
+    NSData *data = [html dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *attributes = @{
+        NSFontAttributeName: font,
+        NSForegroundColorAttributeName: color
+    };
+
+    if (!data) {
+        NSString *normalized = [self normalizedStringForSnippet:html];
+        return [[NSAttributedString alloc] initWithString:normalized attributes:attributes];
+    }
+
+    NSDictionary *options = @{
+        NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
+        NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding)
+    };
+    NSError *error = nil;
+    NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithData:data
+                                                                                         options:options
+                                                                              documentAttributes:nil
+                                                                                           error:&error];
+    if (!attributedString) {
+        NSString *normalized = [self normalizedStringForSnippet:html];
+        return [[NSAttributedString alloc] initWithString:normalized attributes:attributes];
+    }
+
+    NSRange fullRange = NSMakeRange(0, attributedString.length);
+    [attributedString addAttributes:attributes range:fullRange];
+    return attributedString;
+}
+
+- (NSString *)normalizedStringForSnippet:(NSString *)snippet {
+    if (snippet.length == 0) {
+        return @"";
+    }
+    NSError *error = nil;
+    NSRegularExpression *breakRegex = [NSRegularExpression regularExpressionWithPattern:@"<br\\s*/?>"
+                                                                                options:NSRegularExpressionCaseInsensitive
+                                                                                  error:&error];
+    NSString *result = snippet;
+    if (breakRegex) {
+        result = [breakRegex stringByReplacingMatchesInString:snippet
+                                                      options:0
+                                                        range:NSMakeRange(0, snippet.length)
+                                                 withTemplate:@"\n"];
+    }
+    result = [result stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
+    return result;
+}
+
+@end
 #endif
