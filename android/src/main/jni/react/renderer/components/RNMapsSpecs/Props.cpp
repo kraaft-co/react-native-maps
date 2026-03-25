@@ -171,7 +171,11 @@ folly::dynamic RNMapsGoogleMapViewProps::getDiffProps(
   }
     
   if (kmlSrc != oldProps->kmlSrc) {
-    result["kmlSrc"] = kmlSrc;
+    folly::dynamic kmlSrcArray = folly::dynamic::array();
+    for (const auto &kmlSrcItem : kmlSrc) {
+      kmlSrcArray.push_back(kmlSrcItem);
+    }
+    result["kmlSrc"] = std::move(kmlSrcArray);
   }
     
   if (googleMapId != oldProps->googleMapId) {
@@ -454,7 +458,11 @@ folly::dynamic RNMapsMapViewProps::getDiffProps(
   }
     
   if (kmlSrc != oldProps->kmlSrc) {
-    result["kmlSrc"] = kmlSrc;
+    folly::dynamic kmlSrcArray = folly::dynamic::array();
+    for (const auto &kmlSrcItem : kmlSrc) {
+      kmlSrcArray.push_back(kmlSrcItem);
+    }
+    result["kmlSrc"] = std::move(kmlSrcArray);
   }
     
   if (legalLabelInsets != oldProps->legalLabelInsets) {
