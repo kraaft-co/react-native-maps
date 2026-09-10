@@ -38,7 +38,46 @@ static NSString *const RCTMapViewKey = @"MapView";
 {
     BOOL didCallOnMapReady;
 }
+
+- (NSAttributedString *)attributedTextForHTMLString:(NSString *)html
+                                                font:(UIFont *)font
+                                               color:(UIColor *)color;
+- (NSString *)normalizedStringForSnippet:(NSString *)snippet;
 @end
+
+// NSRegularExpression compilation isn't free, and these patterns are static — cache one instance
+// per pattern instead of recompiling it on every marker tap.
+static NSString *AIRReplaceTagPattern(NSString *string, NSString *pattern, NSString *replacement) {
+    static NSMutableDictionary<NSString *, NSRegularExpression *> *cache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [NSMutableDictionary dictionary];
+    });
+    NSRegularExpression *regex = cache[pattern];
+    if (!regex) {
+        regex = [NSRegularExpression regularExpressionWithPattern:pattern
+                                                            options:NSRegularExpressionCaseInsensitive
+                                                              error:nil];
+        cache[pattern] = regex;
+    }
+    return [regex stringByReplacingMatchesInString:string options:0 range:NSMakeRange(0, string.length) withTemplate:replacement];
+}
+
+// Flattens <table>/<tr>/<td>/<th> to avoid crash
+static NSString *AIRFlattenKmlTables(NSString *html) {
+    NSString *flattened = AIRReplaceTagPattern(html, @"<tr\\b[^>]*>", @"");
+    flattened = AIRReplaceTagPattern(flattened, @"</tr>", @" | ");
+    flattened = AIRReplaceTagPattern(flattened, @"<(td|th)\\b[^>]*>", @"");
+    // Space-separated, not "key: value": a colon doesn't read naturally in French, and a row
+    // isn't reliably a 2-column key/value pair anyway.
+    flattened = AIRReplaceTagPattern(flattened, @"</(td|th)>", @" ");
+    flattened = AIRReplaceTagPattern(flattened, @"</?table\\b[^>]*>", @"");
+    // Tidy the "|" row separator: the last row leaves one dangling before whatever follows —
+    // another tag, a newline (if a caller already converted other tags to "\n"), or the end.
+    flattened = AIRReplaceTagPattern(flattened, @"\\|\\s*(?=<|\\n|$)", @"");
+    flattened = AIRReplaceTagPattern(flattened, @"\\s*\\|\\s*", @" | ");
+    return flattened;
+}
 
 @implementation AIRGoogleMapManager
 
@@ -485,7 +524,113 @@ RCT_EXPORT_METHOD(setIndoorActiveLevelIndex:(nonnull NSNumber *)reactTag
 
 - (UIView *)mapView:(GMSMapView *)mapView markerInfoContents:(GMSMarker *)marker {
     AIRGMSMarker *aMarker = (AIRGMSMarker *)marker;
-    return [aMarker.fakeMarker markerInfoContents];
+    UIView *jsContent = [aMarker.fakeMarker markerInfoContents];
+    if (jsContent != nil) {
+        return jsContent;
+    }
+
+    return [self defaultMarkerInfoContentsForTitle:marker.title snippet:marker.snippet];
+}
+
+- (UIView *)defaultMarkerInfoContentsForTitle:(NSString *)title snippet:(NSString *)snippet {
+    if (title.length == 0 && snippet.length == 0) {
+        return nil;
+    }
+    static const CGFloat kMaxWidth = 300.0f;
+    UIFont *titleFont = [UIFont boldSystemFontOfSize:14.0f];
+    UIFont *snippetFont = [UIFont systemFontOfSize:12.0f];
+
+    NSMutableAttributedString *text = [[NSMutableAttributedString alloc] init];
+    if (title.length > 0) {
+        [text appendAttributedString:[[NSAttributedString alloc] initWithString:title
+            attributes:@{NSFontAttributeName: titleFont}]];
+    }
+    if (snippet.length > 0) {
+        if (text.length > 0) {
+            [text appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
+        }
+        NSAttributedString *formattedSnippet = [self attributedTextForHTMLString:snippet font:snippetFont color:[UIColor blackColor]];
+        [text appendAttributedString:formattedSnippet ?:
+            [[NSAttributedString alloc] initWithString:[self normalizedStringForSnippet:snippet] attributes:@{NSFontAttributeName: snippetFont}]];
+    }
+
+    UILabel *label = [[UILabel alloc] init];
+    label.attributedText = text;
+    label.numberOfLines = 0;
+    label.lineBreakMode = NSLineBreakByWordWrapping;
+    CGSize size = [label sizeThatFits:CGSizeMake(kMaxWidth, CGFLOAT_MAX)];
+    label.frame = CGRectMake(0, 0, ceil(size.width), ceil(size.height));
+    return label;
+}
+
+- (NSAttributedString *)attributedTextForHTMLString:(NSString *)html
+                                                font:(UIFont *)font
+                                               color:(UIColor *)color {
+    if (html.length == 0) {
+        return nil;
+    }
+    NSString *flattened = AIRFlattenKmlTables(html);
+    NSData *data = [flattened dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) {
+        return nil;
+    }
+
+    NSDictionary *options = @{
+        NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
+        NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding)
+    };
+    NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithData:data
+                                                                                          options:options
+                                                                               documentAttributes:nil
+                                                                                            error:nil];
+    if (!attributedString) {
+        return nil;
+    }
+
+    NSRange fullRange = NSMakeRange(0, attributedString.length);
+    [attributedString addAttribute:NSForegroundColorAttributeName value:color range:fullRange];
+    [attributedString enumerateAttribute:NSFontAttributeName
+                                  inRange:fullRange
+                                  options:0
+                               usingBlock:^(UIFont *existingFont, NSRange range, BOOL *stop) {
+        UIFont *resolvedFont = font;
+        if (existingFont) {
+            UIFontDescriptor *descriptor = [font.fontDescriptor fontDescriptorWithSymbolicTraits:existingFont.fontDescriptor.symbolicTraits];
+            if (descriptor) {
+                resolvedFont = [UIFont fontWithDescriptor:descriptor size:font.pointSize];
+            }
+        }
+        [attributedString addAttribute:NSFontAttributeName value:resolvedFont range:range];
+    }];
+    return attributedString;
+}
+
+- (NSString *)normalizedStringForSnippet:(NSString *)snippet {
+    if (snippet.length == 0) {
+        return @"";
+    }
+    NSString *stripped = AIRReplaceTagPattern(snippet, @"\\s+", @" ");
+    // Paragraphs/headings/list items become newlines; table rows/cells flow as one wrapping
+    // paragraph instead
+    stripped = AIRReplaceTagPattern(stripped, @"\\s*<(p|h1|h2|h3|h4|h5|h6|li|ul|ol|div)\\b[^>]*>\\s*", @"\n");
+    stripped = AIRReplaceTagPattern(stripped, @"\\s*</(p|h1|h2|h3|h4|h5|h6|li|ul|ol|div)>\\s*", @"\n");
+    stripped = AIRReplaceTagPattern(stripped, @"\\s*<br\\s*/?>\\s*", @"\n");
+    stripped = AIRFlattenKmlTables(stripped);
+    stripped = AIRReplaceTagPattern(stripped, @"<[^>]+>", @"");
+    stripped = [stripped stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
+    stripped = [stripped stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
+    stripped = [stripped stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
+    stripped = [stripped stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
+    stripped = [stripped stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
+    NSArray<NSString *> *lines = [stripped componentsSeparatedByString:@"\n"];
+    NSMutableArray<NSString *> *trimmedLines = [NSMutableArray arrayWithCapacity:lines.count];
+    for (NSString *line in lines) {
+        [trimmedLines addObject:[line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]];
+    }
+    stripped = [trimmedLines componentsJoinedByString:@"\n"];
+    NSRegularExpression *blankLines = [NSRegularExpression regularExpressionWithPattern:@"\n{3,}" options:0 error:nil];
+    stripped = [blankLines stringByReplacingMatchesInString:stripped options:0 range:NSMakeRange(0, stripped.length) withTemplate:@"\n\n"];
+    return [stripped stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
 - (void)mapView:(GMSMapView *)mapView didTapInfoWindowOfMarker:(GMSMarker *)marker {
