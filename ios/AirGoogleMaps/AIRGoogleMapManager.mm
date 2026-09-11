@@ -41,10 +41,38 @@ static NSString *const RCTMapViewKey = @"MapView";
 
 - (UIView *)defaultInfoWindowForMarker:(GMSMarker *)marker;
 - (NSAttributedString *)attributedTextForHTMLString:(NSString *)html
-                                                 font:(UIFont *)font
-                                                color:(UIColor *)color;
+                                                font:(UIFont *)font
+                                               color:(UIColor *)color;
 - (NSString *)normalizedStringForSnippet:(NSString *)snippet;
 @end
+
+static NSString *AIRReplaceTagPattern(NSString *string, NSString *pattern, NSString *replacement) {
+    static NSMutableDictionary<NSString *, NSRegularExpression *> *cache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [NSMutableDictionary dictionary];
+    });
+    NSRegularExpression *regex = cache[pattern];
+    if (!regex) {
+        regex = [NSRegularExpression regularExpressionWithPattern:pattern
+                                                            options:NSRegularExpressionCaseInsensitive
+                                                              error:nil];
+        cache[pattern] = regex;
+    }
+    return [regex stringByReplacingMatchesInString:string options:0 range:NSMakeRange(0, string.length) withTemplate:replacement];
+}
+
+// Flattens <table>/<tr>/<td>/<th> to avoid crash
+static NSString *AIRFlattenKmlTables(NSString *html) {
+    NSString *flattened = AIRReplaceTagPattern(html, @"<tr\\b[^>]*>", @"");
+    flattened = AIRReplaceTagPattern(flattened, @"</tr>", @" | ");
+    flattened = AIRReplaceTagPattern(flattened, @"<(td|th)\\b[^>]*>", @"");
+    flattened = AIRReplaceTagPattern(flattened, @"</(td|th)>", @" ");
+    flattened = AIRReplaceTagPattern(flattened, @"</?table\\b[^>]*>", @"");
+    flattened = AIRReplaceTagPattern(flattened, @"\\|\\s*(?=<|\\n|$)", @"");
+    flattened = AIRReplaceTagPattern(flattened, @"\\s*\\|\\s*", @" | ");
+    return flattened;
+}
 
 static const CGFloat kAIRGenericInfoWindowMaxContentWidth = 260.0f;
 static const CGFloat kAIRGenericInfoWindowMinContentWidth = 120.0f;
@@ -665,38 +693,44 @@ didTapPOIWithPlaceID:(NSString *)placeID
 }
 
 - (NSAttributedString *)attributedTextForHTMLString:(NSString *)html
-                                               font:(UIFont *)font
-                                              color:(UIColor *)color {
+                                                font:(UIFont *)font
+                                               color:(UIColor *)color {
     if (html.length == 0) {
         return nil;
     }
-    NSData *data = [html dataUsingEncoding:NSUTF8StringEncoding];
-    NSDictionary *attributes = @{
-        NSFontAttributeName: font,
-        NSForegroundColorAttributeName: color
-    };
-
+    NSString *flattened = AIRFlattenKmlTables(html);
+    NSData *data = [flattened dataUsingEncoding:NSUTF8StringEncoding];
     if (!data) {
-        NSString *normalized = [self normalizedStringForSnippet:html];
-        return [[NSAttributedString alloc] initWithString:normalized attributes:attributes];
+        return nil;
     }
 
     NSDictionary *options = @{
         NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
         NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding)
     };
-    NSError *error = nil;
     NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithData:data
-                                                                                         options:options
-                                                                              documentAttributes:nil
-                                                                                           error:&error];
+                                                                                          options:options
+                                                                               documentAttributes:nil
+                                                                                            error:nil];
     if (!attributedString) {
-        NSString *normalized = [self normalizedStringForSnippet:html];
-        return [[NSAttributedString alloc] initWithString:normalized attributes:attributes];
+        return nil;
     }
 
     NSRange fullRange = NSMakeRange(0, attributedString.length);
-    [attributedString addAttributes:attributes range:fullRange];
+    [attributedString addAttribute:NSForegroundColorAttributeName value:color range:fullRange];
+    [attributedString enumerateAttribute:NSFontAttributeName
+                                  inRange:fullRange
+                                  options:0
+                               usingBlock:^(UIFont *existingFont, NSRange range, BOOL *stop) {
+        UIFont *resolvedFont = font;
+        if (existingFont) {
+            UIFontDescriptor *descriptor = [font.fontDescriptor fontDescriptorWithSymbolicTraits:existingFont.fontDescriptor.symbolicTraits];
+            if (descriptor) {
+                resolvedFont = [UIFont fontWithDescriptor:descriptor size:font.pointSize];
+            }
+        }
+        [attributedString addAttribute:NSFontAttributeName value:resolvedFont range:range];
+    }];
     return attributedString;
 }
 
